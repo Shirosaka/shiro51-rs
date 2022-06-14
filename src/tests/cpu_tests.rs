@@ -1,5 +1,5 @@
 use crate::lib::{
-    cpu::{PC, CPU},
+    cpu::CPU,
     instruction::Instruction,
     memory::registers::{Register, SFR},
     ops::arithmetics::BitOps,
@@ -17,10 +17,9 @@ fn init_cpu(pc: usize) -> CPU {
 fn ajmp() {
     let mut cpu = init_cpu(0x0345);
 
-    let res = cpu.run_instruction_test(Instruction::AJMP2, 0x23, 0);
+    cpu.run_instruction_test(Instruction::AJMP2, 0x23, 0);
 
     assert_eq!(cpu.get_pc(), 0x0123);
-    assert_eq!(res, PC::Handled);
 }
 
 #[test]

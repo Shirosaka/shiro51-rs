@@ -1,5 +1,6 @@
 use std::ops::Sub;
 use log::{debug, error, info};
+use bitflags::bitflags;
 
 use super::{
     instruction::Instruction,
@@ -10,12 +11,13 @@ use super::{
     ops::arithmetics::BitOps,
 };
 
-#[derive(Debug, PartialEq)]
-pub enum PC {
-    /// Let the main loop know that it can advance the PC by the instruction byte size.
-    Advance,
-    /// Let the main loop know that the instruction has handled PC operations.
-    Handled,
+bitflags! {
+    struct PCState: u8 {
+        /// Let the main loop know that it can advance the PC by the instruction byte size.
+        const ADVANCE = 1 << 0;
+        /// Let the main loop know that the instruction has handled PC operations.
+        const HANDLED = 1 << 1;
+    }
 }
 
 pub struct CPU {
@@ -80,31 +82,31 @@ impl CPU {
             };
 
             match self.run_instruction(insn, arg0, arg1) {
-                PC::Advance => {
+                PCState::ADVANCE => {
                     self.pc += insn_size;
 
                     if self.pc >= 0xFFFF {
                         self.pc -= 0xFFFF
                     }
                 },
-                PC::Handled => continue,
+                _ => (),
             }
         }
     }
 
     #[cfg(test)]
-    pub fn run_instruction_test(&mut self, insn: Instruction, arg0: u8, arg1: u8) -> PC {
-        self.run_instruction(insn, arg0, arg1)
+    pub fn run_instruction_test(&mut self, insn: Instruction, arg0: u8, arg1: u8) {
+        self.run_instruction(insn, arg0, arg1);
     }
 
-    fn run_instruction(&mut self, insn: Instruction, arg0: u8, arg1: u8) -> PC {
+    fn run_instruction(&mut self, insn: Instruction, arg0: u8, arg1: u8) -> PCState {
         debug!("CPU::run_instruction({:?}, {:?}, {:?})", insn, arg0, arg1);
 
         let op: u8 = insn.into();
 
         match insn {
             // 0x00
-            Instruction::NOP => PC::Advance,
+            Instruction::NOP => PCState::ADVANCE,
             // 0x01, 0x21, 0x41, 0x61, 0x81, 0xa1, 0xc1, 0xe1
             Instruction::AJMP1
             | Instruction::AJMP2
@@ -124,41 +126,41 @@ impl CPU {
                 self.pc |= arg0 as usize;
                 debug!("PC: {:#06x} ({:#018b})", self.pc, self.pc);
 
-                PC::Handled
+                PCState::HANDLED
             },
             // 0x02
             Instruction::LJMP => {
                 self.pc = (arg0 as usize) << 8;
                 self.pc |= arg1 as usize;
                 debug!("PC: {:#06x}", self.pc);
-                PC::Handled
+                PCState::HANDLED
             },
             // 0x03
             Instruction::RR_A => {
                 self.data.set_sfr_reg(SFR::ACC, self.data.get_sfr_reg(SFR::ACC) >> 1);
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x04
             Instruction::INC_A => {
                 self.data.set_sfr_reg(SFR::ACC, self.data.get_sfr_reg(SFR::ACC) + 1);
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x05
             Instruction::INC_DATA => {
                 self.data.write(arg0, self.data.read(arg0) + 1);
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x06
             Instruction::INC_INDIRECT_R0 => {
                 let addr = self.data.get_gpr_reg(Register::R0);
                 self.data.write(addr, self.data.read(addr) + 1);
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x07
             Instruction::INC_INDIRECT_R1 => {
                 let addr = self.data.get_gpr_reg(Register::R1);
                 self.data.write(addr, self.data.read(addr) + 1);
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x08..=0x0f
             Instruction::INC_R0
@@ -171,7 +173,7 @@ impl CPU {
             | Instruction::INC_R7 => {
                 let reg = Register::try_from(op - 0x08).unwrap();
                 self.data.set_gpr_reg(reg, self.data.get_gpr_reg(reg) + 1);
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x11, 0x31, 0x51, 0x71, 0x91, 0xb1, 0xd1, 0xf1
             Instruction::ACALL1
@@ -201,7 +203,7 @@ impl CPU {
                 self.pc |= arg0 as usize;
                 debug!("PC: {:#06x} ({:#018b})", self.pc, self.pc);
 
-                PC::Handled
+                PCState::HANDLED
             },
             // 0x20
             Instruction::JB_BIT_CODE => {
@@ -213,7 +215,7 @@ impl CPU {
                     self.pc += arg1 as usize;
                 }
 
-                PC::Handled
+                PCState::HANDLED
             },
             // 0x22
             Instruction::RET => {
@@ -227,12 +229,12 @@ impl CPU {
                 debug!("PC: {:#06x}; SP: {:#04x}", self.pc, sp);
 
                 self.data.set_sfr_reg(SFR::SP, sp);
-                PC::Handled
+                PCState::HANDLED
             },
             // 0x23
             Instruction::RL_A => {
                 self.data.set_sfr_reg(SFR::ACC, self.data.get_sfr_reg(SFR::ACC) << 1);
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x30
             Instruction::JNB_BIT_CODE => {
@@ -244,7 +246,7 @@ impl CPU {
                     self.pc += arg1 as usize;
                 }
 
-                PC::Handled
+                PCState::HANDLED
             }
             // 0x38..=0x3f
             Instruction::ADDC_A_R0
@@ -260,12 +262,12 @@ impl CPU {
 
                 self.addc(acc, rn);
 
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x43
             Instruction::ORL_DATA_CONST => {
                 self.data.write(arg0, self.data.read(arg0) | arg1);
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x4d
             Instruction::ORL_A_R5 => {
@@ -273,7 +275,7 @@ impl CPU {
                     SFR::ACC,
                     self.data.get_sfr_reg(SFR::ACC) | self.data.get_gpr_reg(Register::R5),
                 );
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x50
             Instruction::JNC => {
@@ -285,7 +287,7 @@ impl CPU {
                     self.pc += arg0 as usize;
                 }
 
-                PC::Handled
+                PCState::HANDLED
             }
             // 0x52
             Instruction::ANL_DATA_A => {
@@ -293,7 +295,7 @@ impl CPU {
                 let acc = self.data.get_sfr_reg(SFR::ACC);
 
                 self.data.write(arg0, data & acc);
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x5f
             Instruction::ANL_A_R7 => {
@@ -301,7 +303,7 @@ impl CPU {
                     SFR::ACC,
                     self.data.get_sfr_reg(SFR::ACC) & self.data.get_gpr_reg(Register::R7),
                 );
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x78..=0x7f
             Instruction::MOV_R0_CONST
@@ -313,7 +315,7 @@ impl CPU {
             | Instruction::MOV_R6_CONST
             | Instruction::MOV_R7_CONST => {
                 self.data.set_gpr_reg(Register::try_from(op - 0x78).unwrap(), arg0);
-                PC::Advance
+                PCState::ADVANCE
             }
             // 0x80
             Instruction::SJMP => {
@@ -325,7 +327,7 @@ impl CPU {
                     self.pc += arg0 as usize;
                 }
 
-                PC::Handled
+                PCState::HANDLED
             }
             // 0x88..=0x8f
             Instruction::MOV_DATA_R0
@@ -337,7 +339,7 @@ impl CPU {
             | Instruction::MOV_DATA_R6
             | Instruction::MOV_DATA_R7 => {
                 self.data.write(arg0, self.data.get_gpr_reg(Register::try_from(op - 0x88).unwrap()));
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x95
             Instruction::SUBB_A_DATA => {
@@ -346,7 +348,7 @@ impl CPU {
 
                 self.subb(acc, data);
 
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0x98..=0x9f
             Instruction::SUBB_A_R0
@@ -362,7 +364,7 @@ impl CPU {
 
                 self.subb(acc, reg);
 
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0xa3
             Instruction::INC_DPTR => {
@@ -379,7 +381,7 @@ impl CPU {
                 self.data.set_sfr_reg(SFR::DPL, dpl);
                 self.data.set_sfr_reg(SFR::DPH, dph);
 
-                PC::Advance
+                PCState::ADVANCE
             }
             // 0xa8..=0xaf
             Instruction::MOV_R0_DATA
@@ -392,7 +394,7 @@ impl CPU {
             | Instruction::MOV_R7_DATA => {
                 self.data.set_gpr_reg(Register::try_from(op - 0xa8).unwrap(), self.data.read(arg0));
 
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0xb5
             Instruction::CJNE_A_DATA_CODE => {
@@ -420,7 +422,7 @@ impl CPU {
                 debug!("PSW: {:#010b}", psw);
 
                 self.data.set_sfr_reg(SFR::PSW, psw);
-                PC::Handled
+                PCState::HANDLED
             },
             // 0xb8..= 0xbf
             Instruction::CJNE_R0_CONST_CODE
@@ -447,7 +449,7 @@ impl CPU {
 
                 self.data.set_sfr_reg(SFR::PSW, psw);
 
-                PC::Handled
+                PCState::HANDLED
             }
             // 0xc0
             Instruction::PUSH_DATA => {
@@ -455,7 +457,7 @@ impl CPU {
 
                 self.data.set_sfr_reg(SFR::SP, sp);
                 self.data.write(sp, self.data.read(arg0));
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0xd0
             Instruction::POP_DATA => {
@@ -464,7 +466,7 @@ impl CPU {
 
                 self.data.set_sfr_reg(SFR::SP, sp - 1);
                 self.data.write(arg0, data);
-                PC::Advance
+                PCState::ADVANCE
             },
             // 0xd5
             Instruction::DJNZ_DATA_CODE => {
@@ -478,7 +480,7 @@ impl CPU {
                     self.pc += arg1 as usize;
                 }
 
-                PC::Handled
+                PCState::HANDLED
             },
             // 0xd8..=0xda
             Instruction::DJNZ_R0_CODE
@@ -498,7 +500,7 @@ impl CPU {
                     self.data.set_gpr_reg(reg, data);
                     self.pc += arg1 as usize;
                 }
-                PC::Handled
+                PCState::HANDLED
             },
             // 0xe0
             Instruction::MOVX_A_INDIRECT_DPTR => {
@@ -518,11 +520,11 @@ impl CPU {
                 debug!("Value: {:#04x}", val);
 
                 self.data.set_sfr_reg(SFR::ACC, val);
-                PC::Advance
+                PCState::ADVANCE
             },
             _ => {
                 self.halt("Unimplemented Instruction", insn);
-                PC::Advance
+                PCState::ADVANCE
             },
         }
     }
