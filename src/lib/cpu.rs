@@ -1,4 +1,3 @@
-use core::panic;
 use std::ops::Sub;
 use log::{debug, error, info};
 
@@ -12,7 +11,7 @@ use super::{
 };
 
 #[derive(Debug, PartialEq)]
-enum PC {
+pub enum PC {
     /// Let the main loop know that it can advance the PC by the instruction byte size.
     Advance,
     /// Let the main loop know that the instruction has handled PC operations.
@@ -34,6 +33,21 @@ impl CPU {
         info!("CPU initialized.");
 
         cpu
+    }
+
+    #[cfg(test)]
+    pub fn set_pc(&mut self, pc: usize) {
+        self.pc = pc;
+    }
+
+    #[cfg(test)]
+    pub fn get_pc(&mut self) -> usize {
+        self.pc
+    }
+
+    #[cfg(test)]
+    pub fn get_memory(&mut self) -> &mut Memory {
+        &mut self.data
     }
 
     pub fn load_from_file(&mut self, file_name: &str) -> bool {
@@ -76,6 +90,11 @@ impl CPU {
                 PC::Handled => continue,
             }
         }
+    }
+
+    #[cfg(test)]
+    pub fn run_instruction_test(&mut self, insn: Instruction, arg0: u8, arg1: u8) -> PC {
+        self.run_instruction(insn, arg0, arg1)
     }
 
     fn run_instruction(&mut self, insn: Instruction, arg0: u8, arg1: u8) -> PC {
@@ -300,8 +319,8 @@ impl CPU {
             Instruction::SJMP => {
                 self.pc += 2;
 
-                if arg0.is_bit_set(7){
-                    self.pc = usize::wrapping_add(self.pc, arg0.to_signed() as usize);
+                if arg0 >= 128 {
+                    self.pc -= (arg0 - 127) as usize;
                 } else {
                     self.pc += arg0 as usize;
                 }
@@ -452,9 +471,10 @@ impl CPU {
                 self.pc += 2;
                 let mut data = self.data.read(arg0);
 
+                data -= 1;
+                self.data.write(arg0, data);
+
                 if data > 0 {
-                    data -= 1;
-                    self.data.write(arg0, data);
                     self.pc += arg1 as usize;
                 }
 
@@ -572,210 +592,3 @@ impl CPU {
     }
 }
 
-#[cfg(test)]
-mod instruction_tests {
-    use super::{BitOps, Instruction, Register, CPU, PC, SFR};
-
-    #[test]
-    fn ajmp() {
-        let mut cpu = CPU::init();
-
-        cpu.pc = 0x0345;
-
-        let res = cpu.run_instruction(Instruction::AJMP2, 0x23, 0);
-
-        assert_eq!(cpu.pc, 0x0123);
-        assert_eq!(res, PC::Handled);
-    }
-
-    #[test]
-    fn ljmp() {
-        let mut cpu = CPU::init();
-
-        cpu.run_instruction(Instruction::LJMP, 0x12, 0x34);
-
-        assert_eq!(cpu.pc, 0x1234);
-    }
-
-    #[test]
-    fn jb_bit_code() {
-        let mut cpu = CPU::init();
-
-        cpu.data.set_sfr_reg(SFR::P1, 0b11001010);
-        cpu.data.set_sfr_reg(SFR::ACC, 0b01010110);
-
-        let p1addr: u8 = SFR::P1.into();
-        let accaddr: u8 = SFR::ACC.into();
-
-        cpu.run_instruction(Instruction::JB_BIT_CODE, p1addr + 2, 0x2);
-        assert_eq!(cpu.pc, 3);
-        cpu.run_instruction(Instruction::JB_BIT_CODE, accaddr + 2, 0x2);
-        assert_eq!(cpu.pc, 8);
-    }
-
-    #[test]
-    fn jnb_bit_addr() {
-        let mut cpu = CPU::init();
-
-        cpu.data.set_sfr_reg(SFR::P1, 0b11001010);
-        cpu.data.set_sfr_reg(SFR::ACC, 0b01010110);
-
-        let p1addr: u8 = SFR::P1.into();
-        let accaddr: u8 = SFR::ACC.into();
-
-        cpu.run_instruction(Instruction::JNB_BIT_CODE, p1addr + 3, 0x2);
-        assert_eq!(cpu.pc, 3);
-        cpu.run_instruction(Instruction::JNB_BIT_CODE, accaddr + 3, 0x2);
-        assert_eq!(cpu.pc, 8);
-    }
-
-    #[test]
-    fn acall() {
-        let mut cpu = CPU::init();
-
-        cpu.pc = 0x0123;
-        cpu.data.set_sfr_reg(SFR::SP, 0x07);
-
-        cpu.run_instruction(Instruction::ACALL4, 0x45, 0);
-
-        assert_eq!(cpu.data.get_sfr_reg(SFR::SP), 0x09);
-        assert_eq!(cpu.data.read(0x08), 0x25);
-        assert_eq!(cpu.data.read(0x09), 0x01);
-        assert_eq!(cpu.pc, 0x0345);
-    }
-
-    #[test]
-    fn ret() {
-        let mut cpu = CPU::init();
-
-        cpu.data.set_sfr_reg(SFR::SP, 0x0b);
-        cpu.data.write(0x0a, 0x23);
-        cpu.data.write(0x0b, 0x01);
-
-        cpu.run_instruction(Instruction::RET, 0, 0);
-
-        assert_eq!(cpu.data.get_sfr_reg(SFR::SP), 0x09);
-        assert_eq!(cpu.pc, 0x0123);
-    }
-
-    #[test]
-    fn addc_a_r2() {
-        let mut cpu = CPU::init();
-
-        cpu.data.set_sfr_reg(SFR::ACC, 0xc3);
-        cpu.data.set_gpr_reg(Register::R2, 0xaa);
-        cpu.data.set_sfr_reg(SFR::PSW, 0x80);
-
-        cpu.run_instruction(Instruction::ADDC_A_R2, 0, 0);
-
-        let psw = cpu.data.get_sfr_reg(SFR::PSW);
-
-        assert_eq!(cpu.data.get_sfr_reg(SFR::ACC), 0x6e);
-        assert_eq!(psw.is_bit_set(2), true);
-        assert_eq!(psw.is_bit_set(7), true);
-        assert_eq!(psw.is_bit_set(6), false);
-    }
-
-    #[test]
-    pub fn orl_data_const() {
-        let mut cpu = CPU::init();
-
-        cpu.data.write(0x4f, 0xdb);
-
-        cpu.run_instruction(Instruction::ORL_DATA_CONST, 0x4f, 0xf2);
-
-        assert_eq!(cpu.data.read(0x4f), 0xdb | 0xf2);
-    }
-
-    #[test]
-    fn subb() {
-        let mut cpu = CPU::init();
-
-        cpu.data.set_sfr_reg(SFR::ACC, 0xc9);
-        cpu.data.set_gpr_reg(Register::R2, 0x54);
-        cpu.data.set_sfr_reg(SFR::PSW, 0x80);
-
-        cpu.run_instruction(Instruction::SUBB_A_R2, 0, 0);
-
-        assert_eq!(cpu.data.get_sfr_reg(SFR::ACC), 0x74);
-
-        let psw = cpu.data.get_sfr_reg(SFR::PSW);
-
-        assert_eq!(psw.is_bit_set(2), true);
-        assert_eq!(psw.is_bit_set(6), false);
-        assert_eq!(psw.is_bit_set(7), false);
-    }
-
-    #[test]
-    fn sjmp() {
-        let mut cpu = CPU::init();
-
-        cpu.pc = 0x0100;
-        
-        cpu.run_instruction(Instruction::SJMP, 0xfe - 153, 0);
-
-        assert_eq!(cpu.pc, 0x0099);
-    }
-
-    #[test]
-    fn push_data() {
-        let mut cpu = CPU::init();
-
-        cpu.data.set_sfr_reg(SFR::SP, 0x09);
-        cpu.data.set_sfr_reg(SFR::DPH, 0x01);
-        cpu.data.set_sfr_reg(SFR::DPL, 0x23);
-
-        cpu.run_instruction(Instruction::PUSH_DATA, SFR::DPL.into(), 0);
-
-        assert_eq!(cpu.data.get_sfr_reg(SFR::SP), 0x0a);
-        assert_eq!(cpu.data.read(0x0a), 0x23);
-
-        cpu.run_instruction(Instruction::PUSH_DATA, SFR::DPH.into(), 0);
-
-        assert_eq!(cpu.data.get_sfr_reg(SFR::SP), 0x0b);
-        assert_eq!(cpu.data.read(0x0b), 0x01);
-    }
-
-    #[test]
-    fn pop_data() {
-        let mut cpu = CPU::init();
-
-        cpu.data.write(0x30, 0x20);
-        cpu.data.write(0x31, 0x23);
-        cpu.data.write(0x32, 0x01);
-
-        cpu.data.set_sfr_reg(SFR::SP, 0x32);
-
-        cpu.run_instruction(Instruction::POP_DATA, SFR::DPH.into(), 0);
-
-        assert_eq!(cpu.data.get_sfr_reg(SFR::SP), 0x31);
-        assert_eq!(cpu.data.get_sfr_reg(SFR::DPH), 0x01);
-
-        cpu.run_instruction(Instruction::POP_DATA, SFR::DPL.into(), 0);
-
-        assert_eq!(cpu.data.get_sfr_reg(SFR::SP), 0x30);
-        assert_eq!(cpu.data.get_sfr_reg(SFR::DPL), 0x23);
-
-        cpu.run_instruction(Instruction::POP_DATA, SFR::SP.into(), 0);
-
-        assert_eq!(cpu.data.get_sfr_reg(SFR::SP), 0x20);
-    }
-
-    #[test]
-    fn djnz() {
-        let mut cpu = CPU::init();
-
-        cpu.data.write(0x40, 0x01);
-        cpu.data.write(0x50, 0x70);
-        cpu.data.write(0x60, 0x15);
-
-        cpu.run_instruction(Instruction::DJNZ_DATA_CODE, 1, 1);
-        assert_eq!(cpu.pc, 2);
-        cpu.run_instruction(Instruction::DJNZ_DATA_CODE, 1, 1);
-        assert_eq!(cpu.pc, 5);
-
-        assert_eq!(cpu.data.read(0x40), 0x00);
-        assert_eq!(cpu.data.read(0x50), 0x69);
-        assert_eq!(cpu.data.read(0x60), 0x15);
-    }
-}
