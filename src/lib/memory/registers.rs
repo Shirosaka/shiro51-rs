@@ -1,4 +1,4 @@
-use num_enum::{TryFromPrimitive, IntoPrimitive};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 #[derive(Debug, Clone, Copy, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
@@ -126,11 +126,11 @@ pub enum SFR {
     XBR0 = 0xE1,     // Port I/O Crossbar Control 0
     XBR1 = 0xE2,     // Port I/O Crossbar Control 1
     XBR2 = 0xE3,     // Port I/O Crossbar Control 2
-} 
+}
 
 #[derive(Debug, Clone, Copy, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
-pub enum Register { 
+pub enum Register {
     R0 = 0x00,
     R1 = 0x01,
     R2 = 0x02,
@@ -138,5 +138,5 @@ pub enum Register {
     R4 = 0x04,
     R5 = 0x05,
     R6 = 0x06,
-    R7 = 0x07
+    R7 = 0x07,
 }

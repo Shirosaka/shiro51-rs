@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use num_enum::{TryFromPrimitive, IntoPrimitive};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, TryFromPrimitive, IntoPrimitive)]
@@ -121,7 +121,7 @@ pub enum Instruction {
     JNZ = 0x70,
     ACALL4 = 0x71,
     ORL_C_BIT = 0x72,
-    JMP/*_A_INDIRECT_DPTR*/ = 0x73,
+    JMP = 0x73,
     MOV_A_CONST = 0x74,
     MOV_DATA_CONST = 0x75,
     MOV_INDIRECT_R0_CONST = 0x76,
@@ -264,7 +264,7 @@ pub enum Instruction {
     MOV_R4_A = 0xfc,
     MOV_R5_A = 0xfd,
     MOV_R6_A = 0xfe,
-    MOV_R7_A = 0xff
+    MOV_R7_A = 0xff,
 }
 
 impl Instruction {
@@ -388,8 +388,8 @@ impl Instruction {
             Instruction::JMP => 1,
             Instruction::MOV_A_CONST => 2,
             Instruction::MOV_DATA_CONST => 3,
-            Instruction::MOV_INDIRECT_R0_CONST =>2,
-            Instruction::MOV_INDIRECT_R1_CONST =>2,
+            Instruction::MOV_INDIRECT_R0_CONST => 2,
+            Instruction::MOV_INDIRECT_R1_CONST => 2,
             Instruction::MOV_R0_CONST => 2,
             Instruction::MOV_R1_CONST => 2,
             Instruction::MOV_R2_CONST => 2,
@@ -432,7 +432,7 @@ impl Instruction {
             Instruction::SUBB_A_R7 => 1,
             Instruction::ORL_C_COMPLEMENT_BIT => 2,
             Instruction::AJMP6 => 2,
-            Instruction::MOV_C_BIT =>2,
+            Instruction::MOV_C_BIT => 2,
             Instruction::INC_DPTR => 1,
             Instruction::MUL_AB => 1,
             Instruction::MOV_INDIRECT_R0_DATA => 2,
