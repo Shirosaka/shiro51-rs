@@ -5,6 +5,19 @@ use std::{
 };
 
 bitflags! {
+    pub struct Bit: u8 {
+        const B0 = 1 << 0;
+        const B1 = 1 << 1;
+        const B2 = 1 << 2;
+        const B3 = 1 << 3;
+        const B4 = 1 << 4;
+        const B5 = 1 << 5;
+        const B6 = 1 << 6;
+        const B7 = 1 << 7;
+    }
+}
+
+bitflags! {
     pub struct ArithmeticOpFlags: u8 {
         const C = 1 << 0;
         const AC = 1 << 1;
@@ -29,27 +42,27 @@ bitflags! {
 /// be mindful of the above limits.
 #[derive(Clone, Copy, Eq, Hash, PartialOrd, Ord)]
 pub struct Byte {
-    inner_value: u8,
+    value: u8,
     signed: bool,
     flags: ArithmeticOpFlags,
 }
 
 impl Debug for Byte {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.inner_value)
+        write!(f, "{:?}", self.value)
         // f.debug_struct("Byte").field("inner_value", &self.inner_value).field("signed", &self.signed).field("flags", &self.flags).finish()
     }
 }
 
 impl Display for Byte {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.inner_value)
+        write!(f, "{:?}", self.value)
     }
 }
 
 impl LowerHex for Byte {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        LowerHex::fmt(&self.inner_value, f)
+        LowerHex::fmt(&self.value, f)
     }
 }
 
@@ -73,7 +86,7 @@ impl From<i8> for Byte {
 
 impl PartialEq<Byte> for Byte {
     fn eq(&self, other: &Byte) -> bool {
-        self.inner_value == other.inner_value && self.signed == other.signed
+        self.value == other.value && self.signed == other.signed
     }
 }
 
@@ -81,7 +94,7 @@ impl BitAnd<u8> for Byte {
     type Output = Self;
 
     fn bitand(self, rhs: u8) -> Self::Output {
-        Byte::from(self.inner_value & rhs)
+        Byte::from(self.value & rhs)
     }
 }
 
@@ -97,7 +110,7 @@ impl BitAnd<Byte> for Byte {
     type Output = Self;
 
     fn bitand(self, rhs: Byte) -> Self::Output {
-        Byte::from(self.inner_value & rhs.inner_value)
+        Byte::from(self.value & rhs.value)
     }
 }
 
@@ -120,13 +133,14 @@ impl Add<i8> for Byte {
 impl Add<Byte> for Byte {
     type Output = Self;
 
+    // TODO: solidify add() more
     fn add(self, rhs: Byte) -> Self::Output {
         let result: Byte;
- 
-        if (self.signed || rhs.signed) && (self.inner_value > 127 || rhs.inner_value > 127) {
+
+        if (self.signed || rhs.signed) && (self.value > 127 || rhs.value > 127) {
             result = Byte::from(self.to_signed() + rhs.to_signed())
         } else {
-            result = Byte::from(self.inner_value + rhs.inner_value)
+            result = Byte::from(self.value + rhs.value)
         }
 
         result
@@ -153,15 +167,15 @@ impl AddAssign<Byte> for Byte {
 
 impl Byte {
     pub fn new(val: u8, signed: bool) -> Self {
-        Byte { inner_value: val, signed, flags: ArithmeticOpFlags::empty() }
+        Byte { value: val, signed, flags: ArithmeticOpFlags::empty() }
     }
 
     pub const fn empty() -> Self {
-        Byte { inner_value: 0, signed: false, flags: ArithmeticOpFlags::empty() }
+        Byte { value: 0, signed: false, flags: ArithmeticOpFlags::empty() }
     }
 
     pub const fn empty_signed() -> Self {
-        Byte { inner_value: 0, signed: true, flags: ArithmeticOpFlags::empty() }
+        Byte { value: 0, signed: true, flags: ArithmeticOpFlags::empty() }
     }
 
     pub fn is_signed(&self) -> bool {
@@ -171,16 +185,48 @@ impl Byte {
     pub fn to_signed(&self) -> i8 {
         let signed_value: i8;
 
-        if self.inner_value > 127 {
-            signed_value = 0i8 - (self.inner_value - 127) as i8;
+        if self.value > 127 {
+            signed_value = 0i8 - (self.value - 127) as i8;
         } else {
-            signed_value = self.inner_value as i8;
+            signed_value = self.value as i8;
         }
 
         signed_value
     }
 
-    pub fn get_inner_value(&self) -> u8 {
-        self.inner_value
+    pub fn get_value(&self) -> u8 {
+        self.value
+    }
+
+    pub fn set_value(&mut self, val: u8) {
+        self.value = val;
+    }
+
+    /// Inserts the specified bit or bits.
+    #[inline]
+    pub fn insert_bit(&mut self, bit: Bit) {
+        self.value |= bit.bits;
+    }
+
+    /// Removes the specified bit or bits.
+    #[inline]
+    pub fn remove_bit(&mut self, bit: Bit) {
+        self.value &= !bit.bits;
+    }
+
+    /// Toggles the specified bit or bits.
+    #[inline]
+    pub fn toggle_bit(&mut self, bit: Bit) {
+        self.value ^= bit.bits;
+    }
+
+    /// Sets or unsets the specified bit or bits depending on the passed value.
+    #[inline]
+    pub fn set_bit(&mut self, bit: Bit, value: bool) {
+        if value {
+            self.insert_bit(bit);
+        } else {
+            self.remove_bit(bit);
+        }
     }
 }
