@@ -6,3 +6,10 @@ Inspiration for this project is largelly the use of a microcontroller that uses 
 # Instruction Set
 The instruction set for this emulator can be found [here](https://www.keil.com/dd/docs/datashts/intel/ism51.pdf).
 The datasheet for the Controller can be found [here](https://www.silabs.com/documents/public/data-sheets/C8051F34x.pdf).
+
+# Building
+This project uses the following unstable (nightly) Rust features:
+
+- bigint_helper_methods
+
+as such, the nightly toolchain is a necessity for trying to compile this project.
