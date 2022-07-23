@@ -1,8 +1,12 @@
-use num_enum::{IntoPrimitive, TryFromPrimitive};
+use num_enum::{FromPrimitive, IntoPrimitive};
 
-#[derive(Debug, Clone, Copy, TryFromPrimitive, IntoPrimitive)]
+use crate::addr::Addr8;
+
+#[derive(Debug, FromPrimitive, IntoPrimitive)]
 #[repr(u8)]
 pub enum SFR {
+    #[default]
+    NONE = 0x00, // Default
     ACC = 0xE0,      // Accumulator
     ADC0CF = 0xBC,   // ADC0 Configuration
     ADC0CN = 0xE8,   // ADC0 Control
@@ -128,9 +132,23 @@ pub enum SFR {
     XBR2 = 0xE3,     // Port I/O Crossbar Control 2
 }
 
-#[derive(Debug, Clone, Copy, TryFromPrimitive, IntoPrimitive)]
+impl SFR {
+    #[inline]
+    pub fn addr(self) -> Addr8 {
+        Addr8::new(self as u8)
+    }
+}
+
+impl From<Addr8> for SFR {
+    #[inline]
+    fn from(addr: Addr8) -> Self {
+        SFR::from(addr.as_u8())
+    }
+}
+
+#[derive(Debug, FromPrimitive)]
 #[repr(u8)]
-pub enum Register {
+pub enum GPR {
     R0 = 0x00,
     R1 = 0x01,
     R2 = 0x02,
@@ -139,4 +157,13 @@ pub enum Register {
     R5 = 0x05,
     R6 = 0x06,
     R7 = 0x07,
+    #[default]
+    Unknown = 0xff,
+}
+
+impl GPR {
+    #[inline]
+    pub fn addr(self) -> Addr8 {
+        Addr8::new(self as u8)
+    }
 }
