@@ -1,2 +1,3 @@
-/target
-*.hex
+.vscode/
+target/
+*.HEX

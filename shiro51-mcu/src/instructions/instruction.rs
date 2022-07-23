@@ -1,11 +1,126 @@
-#![allow(dead_code)]
+use std::collections::HashMap;
 
-use num_enum::{IntoPrimitive, TryFromPrimitive};
+use log::info;
+use num_enum::FromPrimitive;
+use shiro51_util::error::{ErrorType, Result, RuntimeError};
+
+use super::arithmetic::*;
+use super::branching::*;
+use super::logical::*;
+use crate::cpu::{CPU, PC};
+
+// pub type InstructionHandler = dyn Fn(&mut CPU, Instruction, u8, u8) -> Result<PCState>;
+pub type InstructionHandler = fn(&mut CPU, Instruction, Option<u8>, Option<u8>) -> Result<PC>;
+
+pub struct InstructionTable {
+    table: HashMap<Instruction, InstructionHandler>,
+}
+
+impl std::fmt::Debug for InstructionTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InstructionTable").finish()
+    }
+}
+
+impl InstructionTable {
+    pub fn new() -> Self {
+        let mut instruction_table = InstructionTable {
+            table: HashMap::new(),
+        };
+
+        info!("Populating instruction table!");
+
+        // branching
+        instruction_table.table.insert(Instruction::NOP, insn_nop);
+        instruction_table.table.insert(Instruction::AJMP1, insn_ajmp);
+        instruction_table.table.insert(Instruction::AJMP2, insn_ajmp);
+        instruction_table.table.insert(Instruction::AJMP3, insn_ajmp);
+        instruction_table.table.insert(Instruction::AJMP4, insn_ajmp);
+        instruction_table.table.insert(Instruction::AJMP5, insn_ajmp);
+        instruction_table.table.insert(Instruction::AJMP6, insn_ajmp);
+        instruction_table.table.insert(Instruction::AJMP7, insn_ajmp);
+        instruction_table.table.insert(Instruction::AJMP8, insn_ajmp);
+        instruction_table.table.insert(Instruction::LJMP, insn_ljmp);
+        instruction_table.table.insert(Instruction::ACALL1, insn_acall);
+        instruction_table.table.insert(Instruction::ACALL2, insn_acall);
+        instruction_table.table.insert(Instruction::ACALL3, insn_acall);
+        instruction_table.table.insert(Instruction::ACALL4, insn_acall);
+        instruction_table.table.insert(Instruction::ACALL5, insn_acall);
+        instruction_table.table.insert(Instruction::ACALL6, insn_acall);
+        instruction_table.table.insert(Instruction::ACALL7, insn_acall);
+        instruction_table.table.insert(Instruction::ACALL8, insn_acall);
+        instruction_table.table.insert(Instruction::LCALL, insn_lcall);
+        instruction_table.table.insert(Instruction::JB_BIT_CODE, insn_jb_bit_code);
+
+        // logical
+        instruction_table.table.insert(Instruction::RL_A, insn_rl_a);
+        instruction_table.table.insert(Instruction::RR_A, insn_rr_a);
+        instruction_table.table.insert(Instruction::ORL_DATA_CONST, insn_orl_data_const);
+        instruction_table.table.insert(Instruction::ORL_A_R0, insn_orl_a_rn);
+        instruction_table.table.insert(Instruction::ORL_A_R1, insn_orl_a_rn);
+        instruction_table.table.insert(Instruction::ORL_A_R2, insn_orl_a_rn);
+        instruction_table.table.insert(Instruction::ORL_A_R3, insn_orl_a_rn);
+        instruction_table.table.insert(Instruction::ORL_A_R4, insn_orl_a_rn);
+        instruction_table.table.insert(Instruction::ORL_A_R5, insn_orl_a_rn);
+        instruction_table.table.insert(Instruction::ORL_A_R6, insn_orl_a_rn);
+        instruction_table.table.insert(Instruction::ORL_A_R7, insn_orl_a_rn);
+        instruction_table.table.insert(Instruction::ANL_A_R0, insn_anl_a_rn);
+        instruction_table.table.insert(Instruction::ANL_A_R1, insn_anl_a_rn);
+        instruction_table.table.insert(Instruction::ANL_A_R2, insn_anl_a_rn);
+        instruction_table.table.insert(Instruction::ANL_A_R3, insn_anl_a_rn);
+        instruction_table.table.insert(Instruction::ANL_A_R4, insn_anl_a_rn);
+        instruction_table.table.insert(Instruction::ANL_A_R5, insn_anl_a_rn);
+        instruction_table.table.insert(Instruction::ANL_A_R6, insn_anl_a_rn);
+        instruction_table.table.insert(Instruction::ANL_A_R7, insn_anl_a_rn);
+        instruction_table.table.insert(Instruction::INC_DATA, insn_inc_data);
+
+        // arithmetic
+        instruction_table.table.insert(Instruction::ADD_A_DATA, insn_add_a_addr);
+        instruction_table.table.insert(Instruction::ADD_A_CONST, insn_add_a_const);
+        instruction_table.table.insert(Instruction::ADD_A_INDIRECT_R0, insn_add_a_rn_indirect);
+        instruction_table.table.insert(Instruction::ADD_A_INDIRECT_R1, insn_add_a_rn_indirect);
+        instruction_table.table.insert(Instruction::ADD_A_R0, insn_add_a_rn);
+        instruction_table.table.insert(Instruction::ADD_A_R1, insn_add_a_rn);
+        instruction_table.table.insert(Instruction::ADD_A_R2, insn_add_a_rn);
+        instruction_table.table.insert(Instruction::ADD_A_R3, insn_add_a_rn);
+        instruction_table.table.insert(Instruction::ADD_A_R4, insn_add_a_rn);
+        instruction_table.table.insert(Instruction::ADD_A_R5, insn_add_a_rn);
+        instruction_table.table.insert(Instruction::ADD_A_R6, insn_add_a_rn);
+        instruction_table.table.insert(Instruction::ADD_A_R7, insn_add_a_rn);
+        instruction_table.table.insert(Instruction::ADDC_A_DATA, insn_addc_a_addr);
+        instruction_table.table.insert(Instruction::ADDC_A_CONST, insn_addc_a_const);
+        instruction_table.table.insert(Instruction::ADDC_A_INDIRECT_R0, insn_addc_a_rn_indirect);
+        instruction_table.table.insert(Instruction::ADDC_A_INDIRECT_R1, insn_addc_a_rn_indirect);
+        instruction_table.table.insert(Instruction::ADDC_A_R0, insn_addc_a_rn);
+        instruction_table.table.insert(Instruction::ADDC_A_R1, insn_addc_a_rn);
+        instruction_table.table.insert(Instruction::ADDC_A_R2, insn_addc_a_rn);
+        instruction_table.table.insert(Instruction::ADDC_A_R3, insn_addc_a_rn);
+        instruction_table.table.insert(Instruction::ADDC_A_R4, insn_addc_a_rn);
+        instruction_table.table.insert(Instruction::ADDC_A_R5, insn_addc_a_rn);
+        instruction_table.table.insert(Instruction::ADDC_A_R6, insn_addc_a_rn);
+        instruction_table.table.insert(Instruction::ADDC_A_R7, insn_addc_a_rn);
+
+        info!("Instruction table populated.");
+
+        instruction_table
+    }
+
+    pub fn get_handler(&self, insn: &Instruction) -> Result<&InstructionHandler> {
+        let res = self.table.get(insn);
+
+        if res.is_none() {
+            return Err(RuntimeError::new(ErrorType::UnknownInstruction));
+        }
+
+        Ok(res.unwrap())
+    }
+}
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, FromPrimitive)]
 #[repr(u8)]
 pub enum Instruction {
+    #[default]
     NOP = 0x00,
     AJMP1 = 0x01,
     LJMP = 0x02,
@@ -268,8 +383,12 @@ pub enum Instruction {
 }
 
 impl Instruction {
-    pub fn get_num_bytes(insn: &Instruction) -> usize {
-        match insn {
+    pub fn op(self) -> u8 {
+        self as u8
+    }
+
+    pub fn bytes(&self) -> usize {
+        match self {
             Instruction::NOP => 1,
             Instruction::AJMP1 => 2,
             Instruction::LJMP => 3,
@@ -528,10 +647,11 @@ impl Instruction {
         }
     }
 
-    pub fn get_instruction_encoding(insn: &Instruction) -> u8 {
-        match insn {
+    #[allow(dead_code)]
+    pub fn get_encoding(&self) -> u8 {
+        match self {
             Instruction::NOP => 0b00000000,
-            _ => todo!("Encoding for Instruction::{:?}", insn),
+            _ => todo!("Encoding for Instruction::{:?}", self),
         }
     }
 }

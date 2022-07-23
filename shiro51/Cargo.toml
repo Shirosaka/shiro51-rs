@@ -1,0 +1,19 @@
+[package]
+name = "shiro51"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# logging
+log = "0.4"
+chrono = "0.4"
+fern = { version = "0.6", features = ["colored"] }
+
+# cli
+clap = { version = "3.2.8", features = ["derive"] }
+
+# shiro51 libs
+shiro51-mcu = { path = "../shiro51-mcu" }
+shiro51-util = { path = "../shiro51-util" }
